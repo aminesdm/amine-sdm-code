@@ -101,9 +101,9 @@ NEEDS_RT = [ST_TO_RT, ST_REP_DONE, ST_NX]
 NEEDS_REP = [ST_REP, ST_CO, ST_VT_REJ]
 
 LINES = [  # name, description, diameter, estimated joints
-    ("ISB-302", "Puits ISB-302 → réseau de collecte", '6"', None),
-    ("ISB-303", "Puits ISB-303 → réseau de collecte", '6"', None),
-    ("ISB-304", "Puits ISB-304 → réseau de collecte", '6"', None),
+    ("ISB-302", "Puits ISB-302 → réseau de collecte", '6"', 200),
+    ("ISB-303", "Puits ISB-303 → réseau de collecte", '6"', 200),
+    ("ISB-304", "Puits ISB-304 → réseau de collecte", '6"', 200),
     ("TFT 716 → TL7-MMFW2", "Ligne TFT 716 vers TL7-MMFW2 (données importées)", '6"', 204),
 ]
 MAX_LINES = 8
@@ -160,7 +160,12 @@ for r in range(8, src.max_row + 1):
         "r1wr": rep_wr, "r1vt": res(v(r, "AG")), "r1d": v(r, "AH"), "r1pv": v(r, "AI"), "r1": res(v(r, "AJ")),
         "rem": v(r, "AN"),
     })
-LAST_DATE = max(j["rt1d"] for j in joints if isinstance(j["rt1d"], datetime))
+# pre-list the planned joints of each ISB line (numbering JN°001..N) so the field team only fills results
+for name, _desc, diam, est in LINES:
+    if name.startswith("ISB") and est:
+        for k in range(1, est + 1):
+            joints.append({"line": name, "joint": f"JN°{k:03d}", "d": diam})
+LAST_DATE = max(j["rt1d"] for j in joints if isinstance(j.get("rt1d"), datetime))
 
 wb = openpyxl.Workbook()
 
@@ -802,4 +807,4 @@ for i, (a, b) in enumerate(G):
 
 wb.active = 0
 wb.save(OUT)
-print("joints imported:", len(joints), "| rt date:", LAST_DATE.date(), "->", OUT)
+print("joints listed:", len(joints), "| rt date:", LAST_DATE.date(), "->", OUT)
