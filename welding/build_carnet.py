@@ -202,14 +202,13 @@ for i, h in enumerate(["Code", "Contrôle", "Signification", "Action"]):
     head(pa, 23, 2 + i, h, BLUE)
 CODES = [("A", "VT / RT", "Accepté", "Aucune — joint conforme"),
          ("R", "VT / RT", "Rejeté — défaut à réparer", "Réparer (WPS REP) → VT → RT de contrôle"),
-         ("NX", "RT", "Film non exploitable / non interprétable", "Refaire la radiographie (sans réparation)"),
-         ("CO", "RT", "Coupe (défaut non réparable)", "Couper le joint, resouder → VT → RT")]
+         ("NX", "RT", "Reprise de film (film à refaire)", "Refaire une radiographie (sans réparation)"),
+         ("CO", "RT", "À couper", "Couper le joint, resouder → VT → RT")]
 for i, row in enumerate(CODES):
     for j, val in enumerate(row):
         style(pa.cell(24 + i, 2 + j, val), bold=(j == 0), align=LEFT if j >= 2 else CENTER)
 pa.cell(24, 2).fill = fill(GREEN_BG); pa.cell(25, 2).fill = fill(RED_BG)
 pa.cell(26, 2).fill = fill(ORANGE_BG); pa.cell(27, 2).fill = fill(PURPLE_BG)
-pa.cell(26, 4).comment = Comment("Hypothèse : NX = film à refaire. Modifiez la signification si votre code diffère.", "QC")
 
 section(pa, "B30:F30", "LISTES (menus déroulants)")
 head(pa, 31, 2, "Filtre ligne", BLUE)
@@ -376,7 +375,7 @@ add_dv(cs, WR_LIST, [f"{C[h]}{FIRST}:{C[h]}{LAST}" for h in ("WR 1ère passe", "
        "Choisir le repère soudeur (WR) — liste SOUDEURS")
 add_dv(cs, VT_LIST, [f"{C[h]}{FIRST}:{C[h]}{LAST}" for h in ("VT Rés.", "R1 VT Rés.", "R2 VT Rés.")], "VT : A = Accepté, R = Rejeté")
 add_dv(cs, RT_LIST, [f"{C[h]}{FIRST}:{C[h]}{LAST}" for h in ("RT1 Rés.", "R1 RT Rés.", "R2 RT Rés.")],
-       "RT : A = Accepté, R = À réparer, NX = Film à refaire, CO = Coupe")
+       "RT : A = Accepté, R = À réparer, NX = Reprise de film, CO = À couper")
 dd = DataValidation(type="date", operator="between", formula1="DATE(2020,1,1)", formula2="DATE(2040,12,31)",
                     allow_blank=True, showErrorMessage=True)
 dd.error, dd.errorTitle = "Saisir une date valide (jj/mm/aaaa)", "Date"
@@ -412,7 +411,7 @@ cs.conditional_formatting.add(f"{E}{FIRST}:{E}{LAST}", FormulaRule(formula=[f'AN
 cs[f"{E}6"].comment = Comment("Un N° de joint en double sur la même ligne s'affiche en ROUGE.", "QC")
 cs[f"{AT}6"].comment = Comment("Jours depuis le soudage (par rapport à la date de PROGRAMME RT) pour un joint non encore accepté. Rouge si > 3 jours.", "QC")
 cs[f"{ST}6"].comment = Comment("Calculé automatiquement à partir des résultats VT / RT et des réparations.", "QC")
-cs[f"{V1}6"].comment = Comment("A = Accepté · R = À réparer · NX = Film à refaire · CO = Coupe", "QC")
+cs[f"{V1}6"].comment = Comment("A = Accepté · R = À réparer · NX = Reprise de film · CO = À couper", "QC")
 cs.page_setup.orientation = "landscape"; cs.page_setup.paperSize = cs.PAPERSIZE_A3
 cs.page_setup.fitToWidth = 1; cs.page_setup.fitToHeight = 0
 cs.sheet_properties.pageSetUpPr.fitToPage = True
@@ -782,13 +781,13 @@ G = [
     ("2. SOUDEURS", "قائمة اللحامين: الرمز WR والاسم والتأهيل. الأداء (عدد الوصلات، الرفض، نسبة الإصلاح) يُحسب تلقائياً."),
     ("3. CARNET DE SOUDURE", "سطر واحد لكل وصلة (joint). املأ الأعمدة الزرقاء فقط: الخط، رقم الوصلة، اللحامين WR لكل تمريرة، تاريخ اللحام، نتيجة VT ثم RT-01."),
     ("   إذا كانت نتيجة RT = R أو CO", "املأ قسم «RÉPARATION 1»: لحام الإصلاح WR، نتيجة VT بعد الإصلاح، ثم تاريخ ونتيجة RT الجديد. وإذا رُفض مرة أخرى استعمل «RÉPARATION 2»."),
-    ("   إذا كانت النتيجة NX", "الفيلم غير صالح للقراءة: تُعاد الصورة الإشعاعية فقط دون إصلاح. سجّل نتيجة RT الجديدة في «R1 RT» واترك «R1 VT» فارغاً."),
+    ("   إذا كانت النتيجة NX", "إعادة الفيلم: تُجرى صورة إشعاعية جديدة فقط دون إصلاح. سجّل نتيجة RT الجديدة في «R1 RT» واترك «R1 VT» فارغاً."),
     ("   عمود STATUT", "يُحسب تلقائياً: À SOUDER ← VT EN ATTENTE ← À RADIOGRAPHIER ← ACCEPTÉ، أو À RÉPARER / COUPE / NX حسب النتائج، حتى تصبح الوصلة مقبولة."),
     ("4. PROGRAMME RT", "كل يوم: اكتب التاريخ واختر الخط، فتظهر تلقائياً قائمة الوصلات التي تحتاج صورة إشعاعية (جديدة، أو بعد إصلاح، أو NX)، مع ملخص أعمال ذلك اليوم."),
     ("5. RÉPARATIONS", "قائمة تلقائية بكل الوصلات المرفوضة التي تنتظر الإصلاح، مع عدد أيام الانتظار (أحمر إذا تجاوز 3 أيام)."),
     ("6. TABLEAU DE BORD", "لوحة التحكم: اختر خطاً أو TOUTES، فتظهر نسبة التقدم وعدد الوصلات المقبولة ونسبة الإصلاح وأداء اللحامين والرسوم البيانية."),
     ("", ""),
-    ("رموز النتائج", "A = مقبول   •   R = مرفوض، يجب الإصلاح   •   NX = فيلم غير صالح، تُعاد الأشعة   •   CO = قطع الوصلة وإعادة لحامها"),
+    ("رموز النتائج", "A = مقبول   •   R = مرفوض، يجب الإصلاح   •   NX = إعادة الفيلم، تُجرى صورة إشعاعية جديدة   •   CO = قطع الوصلة وإعادة لحامها"),
     ("الألوان", "أزرق = بيانات تُدخلها أنت   •   أسود = صيغ تلقائية (لا تكتب فوقها)   •   أصفر = إعدادات   •   رقم وصلة بالأحمر = مكرر على نفس الخط"),
     ("ملاحظة", "بيانات الخط TFT 716 منقولة من ملفك الأصلي (205 وصلات). في الملف الأصلي كان الرمز NR يعني «للإصلاح»، فاستُبدل بالرمز R. خطوط ISB جاهزة لإدخال بياناتها."),
 ]
