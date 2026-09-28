@@ -212,14 +212,13 @@ for i, h in enumerate(["Code", "Contrôle", "Signification", "Action"]):
 CODES = [("A", "VT / RT", "Accepté", "Aucune — joint conforme"),
          ("R", "VT / RT", "Rejeté — défaut à réparer", "Réparer (WPS REP) → VT → RT de contrôle"),
          ("NX", "RT", "Reprise de film (film à refaire)", "Refaire une radiographie (sans réparation)"),
-         ("NT", "RT", "Non conforme — à traiter", "Réparer → VT → RT de contrôle"),
+         ("NT", "RT", "À couper", "Couper le joint, resouder → VT → RT"),
          ("CO", "RT", "À couper", "Couper le joint, resouder → VT → RT")]
 for i, row in enumerate(CODES):
     for j, val in enumerate(row):
         style(pa.cell(24 + i, 2 + j, val), bold=(j == 0), align=LEFT if j >= 2 else CENTER)
 pa.cell(24, 2).fill = fill(GREEN_BG); pa.cell(25, 2).fill = fill(RED_BG)
 pa.cell(26, 2).fill = fill(ORANGE_BG); pa.cell(27, 2).fill = fill(NT_BG); pa.cell(28, 2).fill = fill(PURPLE_BG)
-pa.cell(27, 4).comment = Comment("Signification de NT à confirmer — modifiable ici. NT est traité comme un joint à réparer.", "QC")
 
 section(pa, "B30:F30", "LISTES (menus déroulants)")
 head(pa, 31, 2, "Filtre ligne", BLUE)
@@ -356,7 +355,7 @@ for idx in range(CAP):
         f'=IF({E}{r}="","",IF({P}{r}="","{ST_TO_WELD}",IF({S}{r}="","{ST_VT_WAIT}",'
         f'IF({S}{r}="R","{ST_VT_REJ}",IF({LR}{r}="","{ST_TO_RT}",IF({LR}{r}="A","{ST_ACC}",'
         f'IF({LR}{r}="NX","{ST_NX}",IF({next_vt}="A","{ST_REP_DONE}",IF({next_vt}="R","{ST_VT_REJ}",'
-        f'IF({LR}{r}="CO","{ST_CO}","{ST_REP}"))))))))))'
+        f'IF(OR({LR}{r}="CO",{LR}{r}="NT"),"{ST_CO}","{ST_REP}"))))))))))'
     )
     active = f'OR({ST}{r}="{ST_TO_RT}",{ST}{r}="{ST_REP_DONE}",{ST}{r}="{ST_NX}",{ST}{r}="{ST_REP}",{ST}{r}="{ST_CO}",{ST}{r}="{ST_VT_REJ}")'
     cs[f"{AT}{r}"] = f'=IF(AND(ISNUMBER({P}{r}),{active}),MAX(0,{REF_DATE}-{P}{r}),"")'
@@ -397,7 +396,7 @@ add_dv(cs, WR_LIST, [f"{C[h]}{FIRST}:{C[h]}{LAST}" for h in ("WR 1ère passe", "
        "Choisir le repère soudeur (WR) — liste SOUDEURS")
 add_dv(cs, VT_LIST, [f"{C[h]}{FIRST}:{C[h]}{LAST}" for h in ("VT Rés.", "R1 VT Rés.", "R2 VT Rés.")], "VT : A = Accepté, R = Rejeté")
 add_dv(cs, RT_LIST, [f"{C[h]}{FIRST}:{C[h]}{LAST}" for h in ("RT1 Rés.", "R1 RT Rés.", "R2 RT Rés.")],
-       "RT : A = Accepté, R = À réparer, NX = Reprise de film, NT = Non conforme à traiter, CO = À couper")
+       "RT : A = Accepté, R = À réparer, NX = Reprise de film, NT / CO = À couper")
 dd = DataValidation(type="date", operator="between", formula1="DATE(2020,1,1)", formula2="DATE(2040,12,31)",
                     allow_blank=True, showErrorMessage=True)
 dd.error, dd.errorTitle = "Saisir une date valide (jj/mm/aaaa)", "Date"
@@ -437,7 +436,7 @@ for hcol in ("Coulée 1", "Coulée 2"):
 cs[f"{C['Coulée 1']}6"].comment = Comment("N° de coulée lu automatiquement dans BARDAGE à partir du N° de tube.", "QC")
 cs[f"{AT}6"].comment = Comment("Jours depuis le soudage (par rapport à la date de PROGRAMME RT) pour un joint non encore accepté. Rouge si > 3 jours.", "QC")
 cs[f"{ST}6"].comment = Comment("Calculé automatiquement à partir des résultats VT / RT et des réparations.", "QC")
-cs[f"{V1}6"].comment = Comment("A = Accepté · R = À réparer · NX = Reprise de film · NT = Non conforme · CO = À couper", "QC")
+cs[f"{V1}6"].comment = Comment("A = Accepté · R = À réparer · NX = Reprise de film · NT / CO = À couper", "QC")
 cs.page_setup.orientation = "landscape"; cs.page_setup.paperSize = cs.PAPERSIZE_A3
 cs.page_setup.fitToWidth = 1; cs.page_setup.fitToHeight = 0
 cs.sheet_properties.pageSetUpPr.fitToPage = True
@@ -603,7 +602,7 @@ rp["B7"] = "SYNTHÈSE DES JOINTS DE RÉPARATION"
 rp["B7"].font = font(11, True, "FFFFFF"); rp["B7"].fill = fill("C00000"); rp["B7"].alignment = CENTER
 _rc = lambda crit: f"COUNTIFS({RNG(B)},$P$5,{RNG(V1)},{crit})"
 syn = [("Total", "+".join(_rc(f'"{x}"') for x in REPAIR_CODES)), ("R — à réparer", _rc('"R"')),
-       ("NX — reprise film", _rc('"NX"')), ("NT", _rc('"NT"')), ("CO — à couper", _rc('"CO"')),
+       ("NX — reprise film", _rc('"NX"')), ("NT — à couper", _rc('"NT"')), ("CO — à couper", _rc('"CO"')),
        ("Encore en cours", "+".join(f'COUNTIFS({RNG(B)},$P$5,{RNG(V1)},"{x}",{RNG(ST)},"<>{ST_ACC}")' for x in REPAIR_CODES))]
 for i, (lab, f) in enumerate(syn):
     c0 = 2 + 2 * i
@@ -981,7 +980,7 @@ G = [
     ("ENROBAGE", "كل الوصلات NJ تظهر تلقائياً من CARNET. عندما تصبح الوصلة ACCEPTÉ تصير «À ENROBER». اكتب تاريخ التغليف ونوعه ونتيجة Holiday test. تنبيه: لا تقم بترتيب (Trier) ورقة CARNET، استعمل الفلاتر فقط."),
     ("6. TABLEAU DE BORD", "لوحة التحكم: اختر خطاً أو TOUTES، فتظهر نسبة التقدم وعدد الوصلات المقبولة ونسبة الإصلاح وأداء اللحامين والرسوم البيانية."),
     ("", ""),
-    ("رموز النتائج", "A = مقبول   •   R = مرفوض، يجب الإصلاح   •   NX = إعادة الفيلم، تُجرى صورة إشعاعية جديدة   •   NT = غير مطابق، يُعالج كإصلاح   •   CO = قطع الوصلة وإعادة لحامها"),
+    ("رموز النتائج", "A = مقبول   •   R = مرفوض، يجب الإصلاح   •   NX = إعادة الفيلم، تُجرى صورة إشعاعية جديدة   •   NT أو CO = قطع الوصلة وإعادة لحامها"),
     ("الألوان", "أزرق = بيانات تُدخلها أنت   •   أسود = صيغ تلقائية (لا تكتب فوقها)   •   أصفر = إعدادات   •   رقم وصلة بالأحمر = مكرر على نفس الخط"),
     ("ملاحظة", "بيانات الخط TFT 716 منقولة من ملفك الأصلي (205 وصلات). في الملف الأصلي كان الرمز NR يعني «للإصلاح»، فاستُبدل بالرمز R. خطوط ISB جاهزة لإدخال بياناتها."),
 ]
