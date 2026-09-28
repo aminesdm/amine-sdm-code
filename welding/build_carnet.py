@@ -108,7 +108,6 @@ LINES = [  # name, description, diameter, estimated joints
     ("ISB-302", "Puits ISB-302 → réseau de collecte", '6"', 200),
     ("ISB-303", "Puits ISB-303 → réseau de collecte", '6"', 200),
     ("ISB-304", "Puits ISB-304 → réseau de collecte", '6"', 200),
-    ("TFT 716 → TL7-MMFW2", "Ligne TFT 716 vers TL7-MMFW2 (données importées)", '6"', 204),
 ]
 MAX_LINES = 8
 WELDERS = [  # WR, name, qualifications, status
@@ -164,12 +163,16 @@ for r in range(8, src.max_row + 1):
         "r1wr": rep_wr, "r1vt": res(v(r, "AG")), "r1d": v(r, "AH"), "r1pv": v(r, "AI"), "r1": res(v(r, "AJ")),
         "rem": v(r, "AN"),
     })
+# keep only the project lines (TFT 716 removed at the user's request); pipes laid on removed lines leave the register too
+LINE_SET = {n for n, *_ in LINES}
+REMOVED_PIPES = {str(j[k]).strip() for j in joints if j["line"] not in LINE_SET for k in ("t1", "t2") if j.get(k)}
+joints = [j for j in joints if j["line"] in LINE_SET]
 # pre-list the planned joints of each ISB line (numbering JN°001..N) so the field team only fills results
 for name, _desc, diam, est in LINES:
     if name.startswith("ISB") and est:
         for k in range(1, est + 1):
             joints.append({"line": name, "joint": f"JN°{k:03d}", "d": diam})
-LAST_DATE = max(j["rt1d"] for j in joints if isinstance(j.get("rt1d"), datetime))
+LAST_DATE = max((j["rt1d"] for j in joints if isinstance(j.get("rt1d"), datetime)), default=None)
 
 wb = openpyxl.Workbook()
 
@@ -645,7 +648,7 @@ pipes = []
 reg = openpyxl.load_workbook(SRC, data_only=True)["Feuil1"]
 for r in range(2, reg.max_row + 1):
     tube = reg[f"D{r}"].value
-    if tube in (None, ""):
+    if tube in (None, "") or str(tube).strip() in REMOVED_PIPES:
         continue
     pipes.append([str(tube).strip(), reg[f"B{r}"].value, reg[f"C{r}"].value, reg[f"A{r}"].value, reg[f"E{r}"].value,
                   (reg[f"F{r}"].value or "").strip() or None])
@@ -1105,7 +1108,7 @@ G = [
     ("", ""),
     ("رموز النتائج", "A = مقبول   •   R = مرفوض، يجب الإصلاح   •   NX = إعادة الفيلم، تُجرى صورة إشعاعية جديدة   •   NT أو CO = قطع الوصلة وإعادة لحامها"),
     ("الألوان", "أزرق = بيانات تُدخلها أنت   •   أسود = صيغ تلقائية (لا تكتب فوقها)   •   أصفر = إعدادات   •   رقم وصلة بالأحمر = مكرر على نفس الخط"),
-    ("ملاحظة", "بيانات الخط TFT 716 منقولة من ملفك الأصلي (205 وصلات). في الملف الأصلي كان الرمز NR يعني «للإصلاح»، فاستُبدل بالرمز R. خطوط ISB جاهزة لإدخال بياناتها."),
+    ("ملاحظة", "الملف مخصص للخطوط ISB-302 و ISB-303 و ISB-304 (200 وصلة لكل خط). سجل الأنابيب يحتوي فقط على الأنابيب غير المستعملة من الملف الأصلي؛ أضف أنابيب خطوط ISB في «REGISTRE TUBES»."),
 ]
 for i, (a, b) in enumerate(G):
     r = 4 + i
@@ -1121,4 +1124,4 @@ ORDER = ["TABLEAU DE BORD", "CARNET DE SOUDURE", "BARDAGE", "ENROBAGE", "PROGRAM
 wb._sheets = [wb[n] for n in ORDER]
 wb.active = 0
 wb.save(OUT)
-print("joints listed:", len(joints), "| rt date:", LAST_DATE.date(), "->", OUT)
+print("joints listed:", len(joints), "| pipes in register:", len(pipes), "->", OUT)
