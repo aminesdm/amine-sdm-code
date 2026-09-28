@@ -266,7 +266,7 @@ COLS = [  # header, width, kind (in=input, f=formula, h=hidden helper), group
     ("RT programmé le", 11, "in", "SUIVI"), ("Remarques", 22, "in", "SUIVI"),
     ("Nb RT", 6, "f", "SUIVI"), ("Dernier RT", 8, "f", "SUIVI"), ("STATUT", 24, "f", "SUIVI"),
     ("Attente (j)", 8, "f", "SUIVI"),
-    ("hRT", 4, "h", "H"), ("hRTn", 4, "h", "H"), ("hREP", 4, "h", "H"), ("hREPn", 4, "h", "H"),
+    ("hRT", 4, "h", "H"), ("hRTn", 4, "h", "H"), ("hREP", 4, "h", "H"), ("hREPn", 4, "h", "H"), ("hKEY", 4, "h", "H"),
 ]
 C = {h: CL(i + 1) for i, (h, *_rest) in enumerate(COLS)}
 LASTCOL = CL(len(COLS))
@@ -322,8 +322,9 @@ REF_DATE = "'PROGRAMME RT'!$C$4"
 REP_SHEET = "JOINTS DE RÉPARATION"
 FILT_REP = f"'{REP_SHEET}'!$D$5"
 SHOW_REP = f"'{REP_SHEET}'!$L$4"
-BAR_PIPE = "BARDAGE!$B$7:$B$1506"
-BAR_HEAT = "BARDAGE!$C$7:$C$1506"
+REG = "REGISTRE TUBES"
+BAR_PIPE = f"'{REG}'!$B$7:$B$1506"
+BAR_HEAT = f"'{REG}'!$C$7:$C$1506"
 key_map = {k: C[h] for k, h in {
     "line": "Ligne", "troncon": "Tronçon", "pk": "PK", "joint": "N° Joint", "zone": "Zone", "d": "Ø", "ep": "Ép. (mm)",
     "nuance": "Nuance", "wps": "WPS", "t1": "Tube 1", "t2": "Tube 2", "wr1": "WR 1ère passe", "wr2": "WR 2ème passe",
@@ -365,6 +366,7 @@ for idx in range(CAP):
     cs[f"{HRTN}{r}"] = f'=IF({HRT}{r}=1,SUM({HRT}${FIRST}:{HRT}{r}),"")'
     was_rep = "OR(" + ",".join(f'{V1}{r}="{x}"' for x in REPAIR_CODES) + ")"
     cs[f"{HREP}{r}"] = f'=IF(AND({was_rep},OR({FILT_REP}="TOUTES",{B}{r}={FILT_REP}),OR({SHOW_REP}="TOUS",{ST}{r}<>"{ST_ACC}")),1,0)'
+    cs[f"{C['hKEY']}{r}"] = f'=IF({E}{r}="","",{B}{r}&"|"&{E}{r})'
     for tcol, hcol in (("Tube 1", "Coulée 1"), ("Tube 2", "Coulée 2")):
         t = f"{C[tcol]}{r}"
         cs[f"{C[hcol]}{r}"] = f'=IF({t}="","",IFERROR(INDEX({BAR_HEAT},MATCH({t},{BAR_PIPE},0)),"? hors registre"))'
@@ -638,7 +640,7 @@ for label, f in day_items:
     col += 2
 pg.row_dimensions[9].height = 26
 
-# ================================================================== BARDAGE (pipe register)
+# ================================================================== REGISTRE TUBES (pipe register)
 pipes = []
 reg = openpyxl.load_workbook(SRC, data_only=True)["Feuil1"]
 for r in range(2, reg.max_row + 1):
@@ -648,16 +650,16 @@ for r in range(2, reg.max_row + 1):
     pipes.append([str(tube).strip(), reg[f"B{r}"].value, reg[f"C{r}"].value, reg[f"A{r}"].value, reg[f"E{r}"].value,
                   (reg[f"F{r}"].value or "").strip() or None])
 
-ba = wb.create_sheet("BARDAGE")
+ba = wb.create_sheet(REG)
 ba.sheet_properties.tabColor = "806000"
 BA_FIRST, BA_LAST = 7, 1506
 BH = [("N°", 6, "f"), ("N° Pipe", 12, "in"), ("N° Coulée", 16, "in"), ("N° Lot", 13, "in"), ("N° Usine", 9, "in"),
-      ("Longueur (m)", 10, "in"), ("Revêtement", 22, "in"), ("Date bardage", 12, "in"),
+      ("Longueur (m)", 10, "in"), ("Revêtement", 22, "in"), ("Date réception", 12, "in"),
       ("Ligne", 20, "f"), ("NJ amont", 12, "f"), ("NJ aval", 12, "f"), ("PK", 8, "f"), ("Statut tube", 16, "f"),
       ("Observations", 22, "in")]
-banner(ba, "A1:N1", "BARDAGE — REGISTRE DES TUBES (N° Pipe · N° Coulée)", 18, bg="806000")
+banner(ba, "A1:N1", "REGISTRE DES TUBES (N° Pipe · N° Coulée · Lot · Longueur)", 18, bg="806000")
 ba.merge_cells("A2:N2")
-ba["A2"] = "Saisir les tubes en bleu. Ligne, NJ amont / aval et statut se lisent automatiquement dans le CARNET (colonnes Tube 1 / Tube 2)."
+ba["A2"] = "Liste de tous les tubes reçus (source des N° de coulée). Ligne, NJ amont / aval et statut se lisent automatiquement dans le CARNET et la page BARDAGE."
 ba["A2"].font = font(9, False, "595959", True); ba["A2"].alignment = CENTER
 T1, T2 = C["Tube 1"], C["Tube 2"]
 cnts = [("Tubes :", f"=COUNTA(B{BA_FIRST}:B{BA_LAST})", "#,##0"),
@@ -689,14 +691,14 @@ for idx in range(BA_LAST - BA_FIRST + 1):
     ba[f"J{r}"] = f'=IF(B{r}="","",IFERROR(INDEX({RNG(E)},{m2}),""))'
     ba[f"K{r}"] = f'=IF(B{r}="","",IFERROR(INDEX({RNG(E)},{m1}),""))'
     ba[f"L{r}"] = f'=IF(B{r}="","",IFERROR(INDEX({RNG(C["PK"])},{m1}),IFERROR(INDEX({RNG(C["PK"])},{m2}),"")))'
-    ba[f"M{r}"] = f'=IF(B{r}="","",IF(OR(J{r}<>"",K{r}<>""),"POSÉ EN LIGNE",IF(H{r}<>"","BARDÉ","EN STOCK")))'
+    ba[f"M{r}"] = f'=IF(B{r}="","",IF(OR(J{r}<>"",K{r}<>""),"POSÉ EN LIGNE",IF(COUNTIF(BARDAGE!$C$1:$C$3000,B{r})>0,"BARDÉ","EN STOCK")))'
     for i, (h, w, kind) in enumerate(BH, 1):
         c = ba.cell(r, i)
         c.font = font(9, h == "N° Pipe", "0000FF" if kind == "in" else "000000")
         c.alignment = LEFT if h in ("Revêtement", "Observations", "Ligne") else CENTER
     ba[f"C{r}"].number_format = "0"; ba[f"D{r}"].number_format = "0"
     ba[f"F{r}"].number_format = "0.00"; ba[f"H{r}"].number_format = DATE
-t = Table(displayName="Bardage", ref=f"A6:N{BA_LAST}")
+t = Table(displayName="Registre", ref=f"A6:N{BA_LAST}")
 t.tableStyleInfo = TableStyleInfo(name="TableStyleLight15", showRowStripes=True)
 ba.add_table(t)
 ba.freeze_panes = f"C{BA_FIRST}"
@@ -711,52 +713,169 @@ ba.add_data_validation(dd2); dd2.add(f"H{BA_FIRST}:H{BA_LAST}")
 ba.page_setup.orientation = "landscape"; ba.page_setup.fitToWidth = 1; ba.page_setup.fitToHeight = 0
 ba.sheet_properties.pageSetUpPr.fitToPage = True; ba.print_title_rows = "6:6"
 
-# ================================================================== ENROBAGE (joint coating) — mirrors CARNET row by row
+# ================================================================== BARDAGE — printable sheets, 19 pipes per table, pipes in line order
+BD_ROWS = 19
+seq = {}
+for name, *_ in LINES:
+    seq[name] = []
+seen = set()
+for j in joints:
+    ln = j.get("line")
+    if ln not in seq:
+        continue
+    for key in ("t1", "t2"):
+        t = j.get(key)
+        if not t or str(t).upper().startswith("ANNUL") or t in seen:
+            continue
+        seen.add(t)
+        seq[ln].append([t, j["joint"] if key == "t1" else None])
+    # the pipe entered as Tube 2 gets its downstream joint when it shows up later as Tube 1
+    t1 = j.get("t1")
+    for item in seq[ln]:
+        if item[0] == t1 and item[1] is None:
+            item[1] = j["joint"]
+for name, _d, _dia, est in LINES:
+    if not seq[name] and est:   # line with no pipe data yet: numbered rows, NJ JN°001..N pre-filled
+        seq[name] = [[None, f"JN°{k:03d}" if k <= est else None] for k in range(1, est + 2)]
+
+bd = wb.create_sheet("BARDAGE")
+bd.sheet_properties.tabColor = "806000"
+bd.sheet_view.showGridLines = False
+for col, w in zip("ABCDEFGHIJ", [2, 8, 12, 16, 13, 11, 12, 12, 12, 22]):
+    bd.column_dimensions[col].width = w
+REGR = lambda col: f"'{REG}'!${col}$7:${col}$1506"
+HDRS = ["N° ordre", "N° Pipe", "N° Coulée", "N° Lot", "Longueur (m)", "Longueur cumulée (m)", "NJ (aval)", "Date bardage", "Observations"]
+from openpyxl.worksheet.pagebreak import Break
+row = 1
+first_blocks = {}
+bd_order = [n for n, *_ in LINES if any(it[0] for it in seq[n])] + [n for n, *_ in LINES if not any(it[0] for it in seq[n])]
+for name in bd_order:
+    items = seq[name]
+    pages = max(1, -(-len(items) // BD_ROWS))
+    prev_cum = None
+    for pg_i in range(pages):
+        chunk = items[pg_i * BD_ROWS:(pg_i + 1) * BD_ROWS]
+        chunk += [[None, None]] * (BD_ROWS - len(chunk))
+        first_blocks.setdefault(name, row)
+        banner(bd, f"B{row}:J{row}", "FICHE DE BARDAGE — PIPELINE", 14, bg="806000", height=26)
+        bd.merge_cells(f"B{row + 1}:J{row + 1}")
+        bd[f"B{row + 1}"] = f'={PROJ}&"   •   Affaire N° "&{AFF}'
+        bd[f"B{row + 1}"].font = font(8, False, "595959", True); bd[f"B{row + 1}"].alignment = CENTER
+        r2 = row + 2
+        bd[f"B{r2}"] = "Ligne :"; bd.merge_cells(f"C{r2}:D{r2}"); bd[f"C{r2}"] = name
+        bd[f"E{r2}"] = "Fiche N° :"; bd[f"F{r2}"] = f"{pg_i + 1:02d}"
+        bd[f"G{r2}"] = "Page :"; bd[f"H{r2}"] = f"{pg_i + 1} / {pages}"
+        bd[f"I{r2}"] = "Date :"
+        for a in ("B", "E", "G", "I"):
+            bd[f"{a}{r2}"].font = font(10, True, NAVY); bd[f"{a}{r2}"].alignment = Alignment(horizontal="right", vertical="center")
+        for a in ("C", "F", "H", "J"):
+            bd[f"{a}{r2}"].font = font(10, True, "000000" if a != "J" else "0000FF"); bd[f"{a}{r2}"].alignment = CENTER
+            bd[f"{a}{r2}"].border = Border(bottom=thin)
+        bd[f"J{r2}"].fill = INPUT_FILL; bd[f"J{r2}"].number_format = DATE
+        bd.row_dimensions[r2].height = 20
+        hr = row + 3
+        for ci, h in enumerate(HDRS):
+            style(bd.cell(hr, 2 + ci, h), bold=True, color="FFFFFF", bg=NAVY, size=9)
+        bd.row_dimensions[hr].height = 28
+        for k, (pipe, nj) in enumerate(chunk):
+            r = hr + 1 + k
+            n = pg_i * BD_ROWS + k + 1
+            bd[f"B{r}"] = n if n <= len(items) else None
+            bd[f"C{r}"] = pipe
+            look = lambda col: f'=IF($C{r}="","",IFERROR(INDEX({REGR(col)},MATCH($C{r},{REGR("B")},0)),"?"))'
+            bd[f"D{r}"] = look("C"); bd[f"E{r}"] = look("D"); bd[f"F{r}"] = look("F")
+            bd[f"G{r}"] = f'=IF($C{r}="","",N({prev_cum})+N(F{r}))' if prev_cum else f'=IF($C{r}="","",N(F{r}))'
+            prev_cum = f"G{r}"
+            bd[f"H{r}"] = nj
+            for ci in range(9):
+                c = bd.cell(r, 2 + ci)
+                c.border = BORDER
+                c.alignment = LEFT if ci == 8 else CENTER
+                c.font = font(9, ci in (1, 6), "0000FF" if ci in (1, 7, 8) else "000000")
+                if k % 2:
+                    c.fill = fill("F7F9FC")
+            bd[f"D{r}"].number_format = "0"; bd[f"E{r}"].number_format = "0"
+            bd[f"F{r}"].number_format = "0.00"; bd[f"G{r}"].number_format = "#,##0.00"; bd[f"I{r}"].number_format = DATE
+        tr_ = hr + 1 + BD_ROWS
+        bd[f"B{tr_}"] = "Total fiche"; bd.merge_cells(f"B{tr_}:E{tr_}")
+        bd[f"F{tr_}"] = f"=SUM(F{hr + 1}:F{tr_ - 1})"
+        bd[f"G{tr_}"] = f'=IF(COUNT(G{hr + 1}:G{tr_ - 1})=0,"",MAX(G{hr + 1}:G{tr_ - 1}))'
+        bd[f"H{tr_}"] = f'=COUNTA(C{hr + 1}:C{tr_ - 1})&" tube(s)"'
+        for ci in range(9):
+            style(bd.cell(tr_, 2 + ci), bold=True, color="FFFFFF", bg="806000", size=9)
+        bd[f"F{tr_}"].number_format = "0.00"; bd[f"G{tr_}"].number_format = "#,##0.00"
+        sg = tr_ + 2
+        bd[f"B{sg}"] = "Établi par :"; bd[f"F{sg}"] = "Contrôlé par :"; bd[f"I{sg}"] = "Visa client :"
+        for a in ("B", "F", "I"):
+            bd[f"{a}{sg}"].font = font(9, True, NAVY)
+        bd.row_breaks.append(Break(id=sg + 1))
+        row = sg + 3
+bd.conditional_formatting.add(f"D1:F{row}", CellIsRule(operator="equal", formula=['"?"'], fill=fill(ORANGE_BG), font=Font(name=FONT, bold=True, color=ORANGE_FG)))
+bd.conditional_formatting.add(f"C1:C{row}", FormulaRule(formula=['AND(ISNUMBER($B1),C1<>"",COUNTIF($C$1:$C$3000,C1)>1)'],
+                              fill=fill("FF0000"), font=Font(name=FONT, bold=True, color="FFFFFF")))
+bd.page_setup.orientation = "portrait"; bd.page_setup.paperSize = bd.PAPERSIZE_A4
+bd.page_setup.fitToWidth = 1; bd.page_setup.fitToHeight = 0
+bd.sheet_properties.pageSetUpPr.fitToPage = True
+bd.print_area = f"A1:J{row}"
+dd4 = DataValidation(type="date", operator="between", formula1="DATE(2020,1,1)", formula2="DATE(2040,12,31)", allow_blank=True)
+bd.add_data_validation(dd4); dd4.add(f"I1:I{row}")
+
+# ================================================================== ENROBAGE (joint coating) — NJ written in, data looked up by Ligne + NJ
 en = wb.create_sheet("ENROBAGE")
 en.sheet_properties.tabColor = "375623"
-EH = [("N°", 6, "f"), ("Ligne", 20, "f"), ("NJ", 13, "f"), ("PK", 7, "f"), ("Date soudage", 11, "f"),
+EH = [("N°", 6, "f"), ("Ligne", 20, "in"), ("NJ", 13, "in"), ("PK", 7, "f"), ("Date soudage", 11, "f"),
       ("Dernier RT", 8, "f"), ("Statut joint", 24, "f"), ("Prêt à enrober", 9, "f"),
       ("Date enrobage", 12, "in"), ("Type de revêtement", 24, "in"), ("Équipe / Opérateur", 16, "in"),
-      ("Holiday test (A/R)", 9, "in"), ("N° PV", 11, "in"), ("Statut enrobage", 24, "f"), ("Observations", 22, "in")]
+      ("Holiday test (A/R)", 9, "in"), ("N° PV", 11, "in"), ("Statut enrobage", 24, "f"), ("Observations", 22, "in"),
+      ("hIdx", 4, "h"), ("hKey", 4, "h")]
 banner(en, "A1:O1", "ENROBAGE DES JOINTS (NJ)", 18, bg="375623")
 en.merge_cells("A2:O2")
-en["A2"] = ("Les NJ viennent automatiquement du CARNET (même ordre de lignes) — ne pas TRIER le carnet, utiliser seulement les filtres. "
-            "Un joint est prêt à enrober quand son RT est ACCEPTÉ.")
+en["A2"] = ("Ligne + NJ saisis (bleu) — PK, soudage, RT et statut viennent automatiquement du CARNET. "
+            "Un joint est prêt à enrober quand son RT est ACCEPTÉ. Nouveau joint : ajouter Ligne + NJ en bas de liste.")
 en["A2"].font = font(9, False, "595959", True); en["A2"].alignment = CENTER
 EN_ST = {"ENROBÉ": (GREEN_BG, GREEN_FG), "À ENROBER": (ORANGE_BG, ORANGE_FG), "EN ATTENTE RT": (BLUE_BG, BLUE_FG),
-         "NON SOUDÉ": ("EDEDED", "595959"), "À REPRENDRE": (RED_BG, RED_FG), "⚠ ENROBÉ AVANT ACCEPTATION RT": (RED_BG, RED_FG)}
-ecnt = [("À enrober :", "À ENROBER"), ("Enrobés :", "ENROBÉ"), ("En attente RT :", "EN ATTENTE RT"), ("À reprendre :", "À REPRENDRE")]
-for i, (lab, key) in enumerate(ecnt):
+         "NON SOUDÉ": ("EDEDED", "595959"), "À REPRENDRE": (RED_BG, RED_FG), "⚠ ENROBÉ AVANT ACCEPTATION RT": (RED_BG, RED_FG),
+         "NJ INCONNU": (RED_BG, RED_FG)}
+ecnt = [("À enrober :", 'COUNTIF(N{a}:N{b},"À ENROBER")'), ("Enrobés :", 'COUNTIF(N{a}:N{b},"ENROBÉ")'),
+        ("En attente RT :", 'COUNTIF(N{a}:N{b},"EN ATTENTE RT")'), ("À reprendre :", 'COUNTIF(N{a}:N{b},"À REPRENDRE")'),
+        ("Absents du carnet → ici :", f'SUMPRODUCT(({RNG(C["hKEY"])}<>"")*(COUNTIF(Q{{a}}:Q{{b}},{RNG(C["hKEY"])})=0))')]
+for i, (lab, f) in enumerate(ecnt):
     c0 = 1 + i * 3
     en.cell(3, c0, lab).font = font(10, True, NAVY)
     en.cell(3, c0).alignment = Alignment(horizontal="right", vertical="center")
     en.merge_cells(start_row=3, start_column=c0, end_row=3, end_column=c0 + 1)
-    c = en.cell(3, c0 + 2, f'=COUNTIF(N{FIRST}:N{LAST},"{key}")'); c.font = font(12, True, "C00000"); c.alignment = CENTER
+    c = en.cell(3, c0 + 2, "=" + f.format(a=FIRST, b=LAST)); c.font = font(12, True, "C00000"); c.alignment = CENTER
+en["M3"].comment = Comment("Nombre de joints du CARNET qui ne sont pas encore dans la liste ENROBAGE (à ajouter en bas).", "QC")
 en.row_dimensions[3].height = 22
 for i, (h, w, kind) in enumerate(EH, 1):
     style(en.cell(6, i, h), bold=True, color="FFFFFF", bg="375623" if kind == "in" else NAVY)
     en.column_dimensions[CL(i)].width = w
+    if kind == "h":
+        en.column_dimensions[CL(i)].hidden = True
 en.row_dimensions[6].height = 30
-CR_ = "'CARNET DE SOUDURE'!"
+KEYR = RNG(C["hKEY"])
 for idx in range(CAP):
     r = FIRST + idx
-    src_ = lambda col: f"{CR_}{col}{r}"
-    en[f"A{r}"] = f'=IF({src_(E)}="","",{src_("A")})'
-    en[f"B{r}"] = f'=IF({src_(E)}="","",{src_(B)}&"")'
-    en[f"C{r}"] = f'=IF({src_(E)}="","",{src_(E)})'
-    en[f"D{r}"] = f'=IF({src_(E)}="","",{src_(C["PK"])}&"")'
-    en[f"E{r}"] = f'=IF(OR({src_(E)}="",{src_(P)}=""),"",{src_(P)})'
-    en[f"F{r}"] = f'=IF({src_(E)}="","",{src_(LR)})'
-    en[f"G{r}"] = f'=IF({src_(E)}="","",{src_(ST)})'
+    if idx < len(joints):
+        en[f"B{r}"] = joints[idx]["line"]
+        en[f"C{r}"] = joints[idx]["joint"]
+    en[f"Q{r}"] = f'=IF(C{r}="","",B{r}&"|"&C{r})'
+    en[f"P{r}"] = f'=IF(C{r}="","",IFERROR(MATCH(Q{r},{KEYR},0),""))'
+    g = lambda col, suffix="": f'=IF(OR(C{r}="",P{r}=""),"",INDEX({RNG(col)},P{r}){suffix})'
+    en[f"A{r}"] = f'=IF(C{r}="","",ROW()-{FIRST - 1})'
+    en[f"D{r}"] = g(C["PK"], '&""')
+    en[f"E{r}"] = f'=IF(OR(C{r}="",P{r}=""),"",IF(INDEX({RNG(P)},P{r})="","",INDEX({RNG(P)},P{r})))'
+    en[f"F{r}"] = g(LR)
+    en[f"G{r}"] = f'=IF(C{r}="","",IF(P{r}="","NJ INCONNU",INDEX({RNG(ST)},P{r})))'
     en[f"H{r}"] = f'=IF(C{r}="","",IF(G{r}="{ST_ACC}","OUI","NON"))'
-    en[f"N{r}"] = (f'=IF(C{r}="","",IF(I{r}="",IF(H{r}="OUI","À ENROBER",IF(G{r}="{ST_TO_WELD}","NON SOUDÉ","EN ATTENTE RT")),'
-                   f'IF(L{r}="R","À REPRENDRE",IF(H{r}<>"OUI","⚠ ENROBÉ AVANT ACCEPTATION RT","ENROBÉ"))))')
+    en[f"N{r}"] = (f'=IF(C{r}="","",IF(P{r}="","NJ INCONNU",IF(I{r}="",IF(H{r}="OUI","À ENROBER",IF(G{r}="{ST_TO_WELD}","NON SOUDÉ","EN ATTENTE RT")),'
+                   f'IF(L{r}="R","À REPRENDRE",IF(H{r}<>"OUI","⚠ ENROBÉ AVANT ACCEPTATION RT","ENROBÉ")))))')
     for i, (h, w, kind) in enumerate(EH, 1):
         c = en.cell(r, i)
         c.font = font(9, h in ("NJ", "Statut enrobage"), "0000FF" if kind == "in" else "000000")
         c.alignment = LEFT if h in ("Ligne", "Observations", "Type de revêtement") else CENTER
     en[f"E{r}"].number_format = DATE; en[f"I{r}"].number_format = DATE
-t = Table(displayName="Enrobage", ref=f"A6:O{LAST}")
+t = Table(displayName="Enrobage", ref=f"A6:Q{LAST}")
 t.tableStyleInfo = TableStyleInfo(name="TableStyleLight15", showRowStripes=True)
 en.add_table(t)
 en.freeze_panes = f"D{FIRST}"
@@ -766,7 +885,10 @@ for txt, (bg, fg) in EN_ST.items():
 status_colors(en, f"G{FIRST}:G{LAST}")
 res_colors(en, f"F{FIRST}:F{LAST}")
 res_colors(en, f"L{FIRST}:L{LAST}")
+en.conditional_formatting.add(f"C{FIRST}:C{LAST}", FormulaRule(formula=[f'AND(C{FIRST}<>"",COUNTIF($Q${FIRST}:$Q${LAST},$Q{FIRST})>1)'],
+                              fill=fill("FF0000"), font=Font(name=FONT, bold=True, color="FFFFFF")))
 en.conditional_formatting.add(f"H{FIRST}:H{LAST}", CellIsRule(operator="equal", formula=['"OUI"'], font=Font(name=FONT, bold=True, color=GREEN_FG)))
+add_dv(en, LINE_NAMES, [f"B{FIRST}:B{LAST}"], "Choisir la ligne")
 add_dv(en, '"A,R"', [f"L{FIRST}:L{LAST}"], "Holiday test (balai électrique) : A = Accepté, R = Rejeté")
 add_dv(en, "PARAMÈTRES!$F$32:$F$35", [f"J{FIRST}:J{LAST}"], "Choisir le type de revêtement")
 dd3 = DataValidation(type="date", operator="between", formula1="DATE(2020,1,1)", formula2="DATE(2040,12,31)", allow_blank=True)
@@ -976,8 +1098,9 @@ G = [
     ("   عمود STATUT", "يُحسب تلقائياً: À SOUDER ← VT EN ATTENTE ← À RADIOGRAPHIER ← ACCEPTÉ، أو À RÉPARER / COUPE / NX حسب النتائج، حتى تصبح الوصلة مقبولة."),
     ("4. PROGRAMME RT", "كل يوم: اكتب التاريخ واختر الخط، فتظهر تلقائياً قائمة الوصلات التي تحتاج صورة إشعاعية (جديدة، أو بعد إصلاح، أو NX)، مع ملخص أعمال ذلك اليوم."),
     ("5. JOINTS DE RÉPARATION", "قائمة تلقائية بكل الوصلات التي كانت نتيجة RT-01 فيها R أو NX أو NT أو CO، مع متابعة الإصلاح (WR، VT، RT) والحالة الحالية. اختر «EN COURS» لرؤية غير المقبولة فقط."),
-    ("BARDAGE", "سجل الأنابيب: رقم الأنبوب (N° Pipe) ورقم الصبّة (N° Coulée) واللوت والطول. الخط وأرقام الوصلات NJ والحالة (EN STOCK / BARDÉ / POSÉ EN LIGNE) تُقرأ تلقائياً من CARNET. رقم الصبّة يظهر تلقائياً في CARNET بجانب Tube 1 و Tube 2."),
-    ("ENROBAGE", "كل الوصلات NJ تظهر تلقائياً من CARNET. عندما تصبح الوصلة ACCEPTÉ تصير «À ENROBER». اكتب تاريخ التغليف ونوعه ونتيجة Holiday test. تنبيه: لا تقم بترتيب (Trier) ورقة CARNET، استعمل الفلاتر فقط."),
+    ("BARDAGE", "بطاقات Bardage جاهزة للطباعة: كل جدول 19 أنبوباً بالتسلسل على الخط. اكتب رقم الأنبوب (N° Pipe) فيظهر رقم الصبّة واللوت والطول تلقائياً من «REGISTRE TUBES»، مع الطول التراكمي ورقم الوصلة NJ."),
+    ("REGISTRE TUBES", "سجل كل الأنابيب المستلمة (رقم الأنبوب، رقم الصبّة، اللوت، الطول). منه تُقرأ أرقام الصبّة في CARNET و BARDAGE، والحالة: EN STOCK / BARDÉ / POSÉ EN LIGNE."),
+    ("ENROBAGE", "كل أرقام الوصلات NJ مكتوبة لكل خط. الحالة ونتيجة RT تُقرأ من CARNET. عندما تصبح الوصلة ACCEPTÉ تصير «À ENROBER». اكتب تاريخ التغليف ونوعه ونتيجة Holiday test. وصلة جديدة: أضف الخط و NJ في آخر القائمة."),
     ("6. TABLEAU DE BORD", "لوحة التحكم: اختر خطاً أو TOUTES، فتظهر نسبة التقدم وعدد الوصلات المقبولة ونسبة الإصلاح وأداء اللحامين والرسوم البيانية."),
     ("", ""),
     ("رموز النتائج", "A = مقبول   •   R = مرفوض، يجب الإصلاح   •   NX = إعادة الفيلم، تُجرى صورة إشعاعية جديدة   •   NT أو CO = قطع الوصلة وإعادة لحامها"),
@@ -993,7 +1116,7 @@ for i, (a, b) in enumerate(G):
     gd[f"B{r}"].alignment = Alignment(vertical="center", readingOrder=2)
     gd.row_dimensions[r].height = 36 if b else 10
 
-ORDER = ["TABLEAU DE BORD", "CARNET DE SOUDURE", "BARDAGE", "ENROBAGE", "PROGRAMME RT", REP_SHEET, "SOUDEURS",
+ORDER = ["TABLEAU DE BORD", "CARNET DE SOUDURE", "BARDAGE", "ENROBAGE", "PROGRAMME RT", REP_SHEET, REG, "SOUDEURS",
          "PARAMÈTRES", "دليل الاستخدام"]
 wb._sheets = [wb[n] for n in ORDER]
 wb.active = 0
