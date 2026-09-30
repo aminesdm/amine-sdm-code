@@ -148,12 +148,15 @@ for r in range(8, src.max_row + 1):
         "d": diam(v(r, "M")), "ep": v(r, "N"), "nuance": v(r, "O"), "wps": v(r, "P"),
         "t1": v(r, "F"), "h1": v(r, "G"), "l1": v(r, "H"), "t2": v(r, "I"), "h2": v(r, "J"), "l2": v(r, "K"),
         "wr1": v(r, "Q"), "wr2": v(r, "R"), "wr3": v(r, "S"), "dsoud": v(r, "T"),
-        "vtd": v(r, "V"), "vtpv": v(r, "W"), "vt": res(v(r, "X")),
-        "rt1d": v(r, "Z"), "rt1pv": v(r, "AA"), "rt1": res(v(r, "AB")), "defect": defect,
+        "vtrfi": v(r, "U"), "vtd": v(r, "V"), "vtpv": v(r, "W"), "vt": res(v(r, "X")),
+        "rt1rfi": v(r, "Y"), "rt1d": v(r, "Z"), "rt1pv": v(r, "AA"), "rt1": res(v(r, "AB")), "defect": defect,
         "r1wr": v(r, "AD"), "r1vt": res(v(r, "AG")), "r1d": v(r, "AH") if res(v(r, "AJ")) else None,
         "r1pv": v(r, "AI") if res(v(r, "AJ")) else None, "r1": res(v(r, "AJ")),
         "r2vt": res(v(r, "AQ")), "r2d": v(r, "AR"), "r2pv": v(r, "AS"), "r2": res(v(r, "AT")),
     })
+# welded joints first (source order = line order); the not-yet-welded planned joints go to the bottom,
+# otherwise the ~750 empty JN placeholders at the top of the BDD make the carnet look empty
+joints = [j for j in joints if j.get("dsoud")] + [j for j in joints if not j.get("dsoud")]
 LAST_DATE = max((j["rt1d"] for j in joints if isinstance(j.get("rt1d"), datetime)), default=None)
 
 # welder references (single WR or team string such as "WR-46-44/36-33") ranked by joints welded
@@ -255,8 +258,8 @@ COLS = [  # header, width, kind (in=input, f=formula, h=hidden helper), group
     ("Tube 2", 10, "in", "ID"), ("Coulée 2", 11, "in", "ID"), ("Long. 2", 7, "in", "ID"),
     ("WR 1ère passe", 24, "in", "SOUD"), ("WR 2ème passe", 9, "in", "SOUD"), ("WR B+F", 9, "in", "SOUD"),
     ("Date soudage", 11, "in", "SOUD"),
-    ("VT Date", 11, "in", "VT"), ("VT PV N°", 9, "in", "VT"), ("VT Rés.", 6, "in", "VT"),
-    ("RT1 Date", 11, "in", "RT1"), ("RT1 PV N°", 10, "in", "RT1"), ("RT1 Rés.", 6, "in", "RT1"),
+    ("VT RFI", 7, "in", "VT"), ("VT Date", 11, "in", "VT"), ("VT PV N°", 9, "in", "VT"), ("VT Rés.", 6, "in", "VT"),
+    ("RT1 RFI", 7, "in", "RT1"), ("RT1 Date", 11, "in", "RT1"), ("RT1 PV N°", 10, "in", "RT1"), ("RT1 Rés.", 6, "in", "RT1"),
     ("Défaut / paramètre rép.", 22, "in", "RT1"),
     ("R1 WR", 8, "in", "R1"), ("R1 VT Rés.", 7, "in", "R1"), ("R1 RT Date", 11, "in", "R1"),
     ("R1 RT PV N°", 10, "in", "R1"), ("R1 RT Rés.", 7, "in", "R1"),
@@ -327,7 +330,7 @@ key_map = {k: C[h] for k, h in {
     "line": "Ligne", "troncon": "Tronçon", "pk": "PK", "joint": "N° Joint", "zone": "Zone", "d": "Ø", "ep": "Ép. (mm)",
     "nuance": "Nuance", "wps": "WPS", "t1": "Tube 1", "t2": "Tube 2", "h1": "Coulée 1", "h2": "Coulée 2", "l1": "Long. 1", "l2": "Long. 2",
     "defect": "Défaut / paramètre rép.", "r2vt": "R2 VT Rés.", "r2d": "R2 RT Date", "r2pv": "R2 RT PV N°", "r2": "R2 RT Rés.", "wr1": "WR 1ère passe", "wr2": "WR 2ème passe",
-    "wr3": "WR B+F", "dsoud": "Date soudage", "vtd": "VT Date", "vtpv": "VT PV N°", "vt": "VT Rés.",
+    "wr3": "WR B+F", "dsoud": "Date soudage", "vtrfi": "VT RFI", "rt1rfi": "RT1 RFI", "vtd": "VT Date", "vtpv": "VT PV N°", "vt": "VT Rés.",
     "rt1d": "RT1 Date", "rt1pv": "RT1 PV N°", "rt1": "RT1 Rés.", "r1wr": "R1 WR", "r1vt": "R1 VT Rés.",
     "r1d": "R1 RT Date", "r1pv": "R1 RT PV N°", "r1": "R1 RT Rés.", "rem": "Remarques"}.items()}
 DATE_COLS = [C[h] for h in ("Date soudage", "VT Date", "RT1 Date", "R1 RT Date", "R2 RT Date", "RT programmé le")]
