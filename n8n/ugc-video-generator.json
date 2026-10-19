@@ -1,0 +1,522 @@
+{
+  "name": "UGC Video Generator (Sora 2)",
+  "nodes": [
+    {
+      "name": "Formulaire produit",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "bf1cb4d2-3478-4b29-81de-377589166abd",
+      "parameters": {
+        "formTitle": "Générateur de vidéos UGC",
+        "formDescription": "Envoyez la photo de votre produit : une vidéo publicitaire style UGC vous sera envoyée par e-mail.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Nom du produit",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Description du produit",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Public cible",
+              "placeholder": "ex. femmes 25-35 ans, sportifs, parents…"
+            },
+            {
+              "fieldLabel": "Langue de la vidéo",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Français"
+                  },
+                  {
+                    "option": "Arabe (darija)"
+                  },
+                  {
+                    "option": "Anglais"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "E-mail",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Photo du produit",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".jpg, .jpeg, .png, .webp",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "1a296734-816e-4a2e-ad48-69fdbf16c307"
+    },
+    {
+      "name": "Normaliser les données",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Renomme les champs du formulaire et place la photo dans le binaire `image`\nreturn $input.all().map((item) => {\n  const f = item.json;\n  const keys = Object.keys(item.binary || {});\n  if (!keys.length) throw new Error('Aucune photo produit reçue');\n  return {\n    json: {\n      productName: f['Nom du produit'],\n      description: f['Description du produit'],\n      audience: f['Public cible'] || 'grand public',\n      language: f['Langue de la vidéo'],\n      email: f['E-mail'],\n    },\n    binary: { image: item.binary[keys[0]] },\n  };\n});"
+      },
+      "id": "4ad49277-8d10-4c01-85f9-bcee2e56cdf4"
+    },
+    {
+      "name": "Archiver la photo (Drive)",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        440,
+        100
+      ],
+      "parameters": {
+        "name": "={{ $json.productName }} - photo - {{ $now.toFormat('yyyy-LL-dd HH-mm') }}",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "root",
+          "mode": "list",
+          "cachedResultName": "/ (Root folder)"
+        },
+        "inputDataFieldName": "image",
+        "options": {}
+      },
+      "id": "11d74983-4645-4cd9-a4b8-a90372094346"
+    },
+    {
+      "name": "Agent IA - Script UGC",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "promptType": "define",
+        "hasOutputParser": true,
+        "text": "=Analyse la photo jointe et écris une vidéo publicitaire UGC pour ce produit.\n\nProduit : {{ $json.productName }}\nDescription : {{ $json.description }}\nPublic cible : {{ $json.audience }}\nLangue des dialogues : {{ $json.language }}",
+        "options": {
+          "passthroughBinaryImages": true,
+          "systemMessage": "Tu es un créateur de publicités UGC (user-generated content) pour TikTok, Reels et Shorts.\n\n1. Décris précisément le produit visible sur la photo (forme, couleurs, matières, packaging, logo, texte lisible) pour qu'un modèle vidéo puisse le reproduire fidèlement sans voir l'image.\n2. Écris un script de 8 secondes maximum : accroche forte dans la première seconde, bénéfice concret, appel à l'action.\n3. Rédige `sora_prompt` en anglais pour Sora 2 : vidéo verticale filmée au smartphone, style selfie authentique, une personne fictive (jamais une célébrité ni une personne réelle) qui tient et utilise le produit dans un décor du quotidien, lumière naturelle, plans et mouvements de caméra décrits, dialogue exact entre guillemets dans la langue demandée, aucune marque tierce ni texte à l'écran.\n4. Propose une légende et des hashtags pour la publication."
+        }
+      },
+      "id": "1e31bcbb-cc65-4ffe-a336-4d10d9dc6bd8"
+    },
+    {
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        380,
+        520
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o",
+          "mode": "list",
+          "cachedResultName": "gpt-4o"
+        },
+        "options": {
+          "temperature": 0.8
+        }
+      },
+      "id": "32b81bd3-2f7a-4568-b731-61c5630aeeae"
+    },
+    {
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        520
+      ],
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"product_details\": \"Flacon en verre ambré de 30 ml avec pipette noire, étiquette blanche…\",\n  \"hook\": \"Je ne sortais plus sans maquillage… jusqu'à ce sérum.\",\n  \"script\": \"Plan 1 (0-2s) : … Plan 2 (2-6s) : … Plan 3 (6-8s) : …\",\n  \"sora_prompt\": \"Vertical smartphone selfie video, a woman in her late 20s in a bright bathroom…\",\n  \"caption\": \"Mon secret pour une peau éclatante ✨\",\n  \"hashtags\": [\n    \"#ugc\",\n    \"#skincare\"\n  ]\n}"
+      },
+      "id": "b10bb9f2-f098-40a5-b175-c4680a348794"
+    },
+    {
+      "name": "Créer la vidéo (Sora 2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        800,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/videos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ model: 'sora-2', prompt: $json.output.sora_prompt, seconds: '8', size: '720x1280' }) }}",
+        "options": {}
+      },
+      "id": "b3895744-9d59-4438-bf2e-33ee2a1c6316"
+    },
+    {
+      "name": "Attendre 60 s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1020,
+        300
+      ],
+      "webhookId": "2eb1f98f-bf2d-450a-be1d-4b0bdc7b12c0",
+      "parameters": {
+        "amount": 60,
+        "unit": "seconds"
+      },
+      "id": "9b0f4b2c-7775-4dff-b45f-ea791456fffe"
+    },
+    {
+      "name": "Vérifier le statut",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        300
+      ],
+      "parameters": {
+        "url": "=https://api.openai.com/v1/videos/{{ $('Créer la vidéo (Sora 2)').item.json.id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "options": {}
+      },
+      "id": "f6da5448-725a-4fdb-8aad-4fa5aacbc00f"
+    },
+    {
+      "name": "Vidéo prête ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1460,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "628990f2-bc89-4aa1-87be-ba6555c398a6",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "78dc2ce6-c418-4dd2-a337-af19f8f24007"
+    },
+    {
+      "name": "Échec ou délai dépassé ?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1680,
+        460
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "84880f70-3b5f-4214-949a-a03706830931",
+              "leftValue": "={{ $json.status === 'failed' || $runIndex >= 20 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "3e68ff21-c0f7-4f62-990f-8cc9bdcb6f90"
+    },
+    {
+      "name": "Arrêter avec erreur",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1900,
+        380
+      ],
+      "parameters": {
+        "errorMessage": "=Génération Sora échouée ou trop longue (statut : {{ $json.status }}) {{ $json.error ? JSON.stringify($json.error) : '' }}"
+      },
+      "id": "154c45d4-ec41-4825-9e74-43901d10fcad"
+    },
+    {
+      "name": "Télécharger la vidéo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        200
+      ],
+      "parameters": {
+        "url": "=https://api.openai.com/v1/videos/{{ $('Créer la vidéo (Sora 2)').item.json.id }}/content",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "video"
+            }
+          }
+        }
+      },
+      "id": "a793de2b-7df2-4ff3-bbf4-728e79626214"
+    },
+    {
+      "name": "Enregistrer la vidéo (Drive)",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1900,
+        200
+      ],
+      "parameters": {
+        "name": "={{ $('Normaliser les données').item.json.productName }} - UGC - {{ $now.toFormat('yyyy-LL-dd HH-mm') }}.mp4",
+        "driveId": {
+          "__rl": true,
+          "value": "My Drive",
+          "mode": "list",
+          "cachedResultName": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "root",
+          "mode": "list",
+          "cachedResultName": "/ (Root folder)"
+        },
+        "inputDataFieldName": "video",
+        "options": {}
+      },
+      "id": "7c35f837-775a-4ebe-b1c9-af2669bfa9b1"
+    },
+    {
+      "name": "Envoyer par e-mail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2120,
+        200
+      ],
+      "webhookId": "714c2901-fd78-4a79-a01d-1685bd4b0cc7",
+      "parameters": {
+        "sendTo": "={{ $('Normaliser les données').item.json.email }}",
+        "subject": "=🎬 Votre vidéo UGC est prête : {{ $('Normaliser les données').item.json.productName }}",
+        "emailType": "html",
+        "message": "=<p>Bonjour,</p>\n<p>Votre vidéo publicitaire pour <b>{{ $('Normaliser les données').item.json.productName }}</b> est prête :</p>\n<p><a href=\"https://drive.google.com/file/d/{{ $json.id }}/view\">▶️ Voir la vidéo sur Google Drive</a></p>\n<h3>Accroche</h3><p>{{ $('Agent IA - Script UGC').item.json.output.hook }}</p>\n<h3>Script</h3><p>{{ $('Agent IA - Script UGC').item.json.output.script }}</p>\n<h3>Légende suggérée</h3><p>{{ $('Agent IA - Script UGC').item.json.output.caption }}<br>{{ $('Agent IA - Script UGC').item.json.output.hashtags.join(' ') }}</p>",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "id": "e535c05b-d65f-4bd5-aad9-93be1cfec355"
+    }
+  ],
+  "connections": {
+    "Formulaire produit": {
+      "main": [
+        [
+          {
+            "node": "Normaliser les données",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliser les données": {
+      "main": [
+        [
+          {
+            "node": "Archiver la photo (Drive)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Agent IA - Script UGC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent IA - Script UGC",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Agent IA - Script UGC",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent IA - Script UGC": {
+      "main": [
+        [
+          {
+            "node": "Créer la vidéo (Sora 2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Créer la vidéo (Sora 2)": {
+      "main": [
+        [
+          {
+            "node": "Attendre 60 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attendre 60 s": {
+      "main": [
+        [
+          {
+            "node": "Vérifier le statut",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vérifier le statut": {
+      "main": [
+        [
+          {
+            "node": "Vidéo prête ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vidéo prête ?": {
+      "main": [
+        [
+          {
+            "node": "Télécharger la vidéo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Échec ou délai dépassé ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Échec ou délai dépassé ?": {
+      "main": [
+        [
+          {
+            "node": "Arrêter avec erreur",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Attendre 60 s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Télécharger la vidéo": {
+      "main": [
+        [
+          {
+            "node": "Enregistrer la vidéo (Drive)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enregistrer la vidéo (Drive)": {
+      "main": [
+        [
+          {
+            "node": "Envoyer par e-mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false
+}
